@@ -1,41 +1,34 @@
 ```python
 import cv2
-import operator
+import numpy as np
 
-face_cascade=cv2.CascadeClassifier("./haarcascade_frontalface_alt2.xml")
-profile_cascade=cv2.CascadeClassifier("./haarcascade_profileface.xml")
+lo=np.array([95, 100, 50])
+hi=np.array([105, 255, 255])
+color_infos=(0, 255, 255)
 cap=cv2.VideoCapture(0)
-width=int(cap.get(3))
-marge=70
 
 while True:
     ret, frame=cap.read()
-    tab_face=[]
-    tickmark=cv2.getTickCount()
-    gray=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    face=face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4, minSize=(5, 5))
-    for x, y, w, h in face:
-        tab_face.append([x, y, x+w, y+h])
-    face=profile_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4)
-    for x, y, w, h in face:
-        tab_face.append([x, y, x+w, y+h])
-    gray2=cv2.flip(gray, 1)
-    face=profile_cascade.detectMultiScale(gray2, scaleFactor=1.2, minNeighbors=4)
-    for x, y, w, h in face:
-        tab_face.append([width-x, y, width-(x+w), y+h])
-    tab_face=sorted(tab_face, key=operator.itemgetter(0, 1))
-    index=0
-    for x, y, x2, y2 in tab_face:
-        if not index or (x-tab_face[index-1][0]>marge or y-tab_face[index-1][1]>marge):
-            cv2.rectangle(frame, (x, y), (x2, y2), (0, 0, 255), 2)
-        index+=1
+    image=cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mask=cv2.inRange(image, lo, hi)
+    image=cv2.blur(image, (7, 7))
+    mask=cv2.erode(mask, None, iterations=4)
+    mask=cv2.dilate(mask, None, iterations=4)
+    image2=cv2.bitwise_and(frame, frame, mask=mask)
+    elements=cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+    if len(elements) > 0:
+        c=max(elements, key=cv2.contourArea)
+        ((x, y), rayon)=cv2.minEnclosingCircle(c)
+        if rayon>30:
+            cv2.circle(image2, (int(x), int(y)), int(rayon), color_infos, 2)
+            cv2.circle(frame, (int(x), int(y)), 5, color_infos, 10)
+            cv2.line(frame, (int(x), int(y)), (int(x)+150, int(y)), color_infos, 2)
+            cv2.putText(frame, "Objet !!!", (int(x)+10, int(y) -10), cv2.FONT_HERSHEY_DUPLEX, 1, color_infos, 1, cv2.LINE_AA)
+    cv2.imshow('Camera', frame)
+    cv2.imshow('image2', image2)
+    cv2.imshow('Mask', mask)
     if cv2.waitKey(1)&0xFF==ord('q'):
         break
-    fps=cv2.getTickFrequency()/(cv2.getTickCount()-tickmark)
-    cv2.putText(frame, "FPS: {:05.2f}".format(fps), (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
-    cv2.imshow('video', frame)
 cap.release()
 cv2.destroyAllWindows()
-
-
 ```
