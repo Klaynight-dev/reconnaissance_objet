@@ -1,84 +1,120 @@
 # reconnaissance_objet
 https://maker.pro/raspberry-pi/tutorial/how-to-create-object-detection-with-opencv
 ```python
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+
+import datetime
+from ultralytics import YOLO
 import cv2
-import numpy as np
+from imutils.video import VideoStream
+#from helper import create_video_writer
 
-cap = cv2.VideoCapture(0)
 
-r, h, c, w = 200, 20, 300, 20  # simply hardcoded the values
-track_window = (c, r, w, h)
+# define some constants
+CONFIDENCE_THRESHOLD = 0.8
+GREEN = (0, 255, 0)
+
+# load the pre-trained YOLOv8n model
+model = YOLO("yolov8n.pt")
+"""
+#detect on image
+frame= cv2.imread('./datasets/two-boats.jpg');ret= True #from image file
+detections = model(frame)[0]
+# loop over the detections
+#for data in detections.boxes.data.tolist():
+for box in detections.boxes:
+    #extract the label name
+    label=model.names.get(box.cls.item())
+        
+    # extract the confidence (i.e., probability) associated with the detection
+    data=box.data.tolist()[0]
+    confidence = data[4]
+
+    # filter out weak detections by ensuring the
+    # confidence is greater than the minimum confidence
+    if float(confidence) < CONFIDENCE_THRESHOLD:
+        continue
+
+    # if the confidence is greater than the minimum confidence,
+    # draw the bounding box on the frame
+    xmin, ymin, xmax, ymax = int(data[0]), int(data[1]), int(data[2]), int(data[3])
+    cv2.rectangle(frame, (xmin, ymin) , (xmax, ymax), GREEN, 2)
+
+    #draw confidence and label
+    y = ymin - 15 if ymin - 15 > 15 else ymin + 15
+    cv2.putText(frame, "{} {:.1f}%".format(label,float(confidence*100)), (xmin, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 2)
+
+# show the frame to our screen
+cv2.imshow("Img", frame)
+"""
+#detect on video
+# initialize the video capture object
+#vs = VideoStream(src=0, resolution=(1600, 1200)).start()
+video_cap = cv2.VideoCapture(0)
+# initialize the video writer object
+#writer = create_video_writer(video_cap, "output.mp4")
 
 while True:
-ret, frame = cap.read()
+    # start time to compute the fps
+    start = datetime.datetime.now()
 
-gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-_, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
-contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-if len(contours) != 0:
-largest_contour = max(contours, key = cv2.contourArea)
-x, y, w, h = cv2.boundingRect(largest_contour)
-cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-
-track_window = (x, y, w, h)
-
-roi = frame[y:y+h, x:x+w]
-hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-mask = cv2.inRange(hsv_roi, np.array((0., 60., 32.)), np.array((180., 255., 255.)))
-roi_hist = cv2.calcHist([hsv_roi], [0], mask, [180], [0, 180])
-cv2.normalize(roi_hist, roi_hist, 0, 255, cv2.NORM_MINMAX)
-
-term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
-ret, track_window = cv2.meanShift(thresh, track_window, term_crit)
-
-x, y, w, h = track_window
-cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-
-cv2.imshow('Object Tracking', frame)
-
-if cv2.waitKey(1) & 0xFF == ord('q'):
-break
-
-cap.release()
-cv2.destroyAllWindows()
-```
-```python
-import cv2
-import operator
-
-face_cascade=cv2.CascadeClassifier("./haarcascade_frontalface_alt2.xml")
-profile_cascade=cv2.CascadeClassifier("./haarcascade_profileface.xml")
-cap=cv2.VideoCapture(0)
-width=int(cap.get(3))
-marge=70
-
-while True:
-    ret, frame=cap.read()
-    tab_face=[]
-    tickmark=cv2.getTickCount()
-    gray=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    face=face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4, minSize=(5, 5))
-    for x, y, w, h in face:
-        tab_face.append([x, y, x+w, y+h])
-    face=profile_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4)
-    for x, y, w, h in face:
-        tab_face.append([x, y, x+w, y+h])
-    gray2=cv2.flip(gray, 1)
-    face=profile_cascade.detectMultiScale(gray2, scaleFactor=1.2, minNeighbors=4)
-    for x, y, w, h in face:
-        tab_face.append([width-x, y, width-(x+w), y+h])
-    tab_face=sorted(tab_face, key=operator.itemgetter(0, 1))
-    index=0
-    for x, y, x2, y2 in tab_face:
-        if not index or (x-tab_face[index-1][0]>marge or y-tab_face[index-1][1]>marge):
-            cv2.rectangle(frame, (x, y), (x2, y2), (0, 0, 255), 2)
-        index+=1
-    if cv2.waitKey(1)&0xFF==ord('q'):
+    ret, frame = video_cap.read()
+    
+    # if there are no more frames to process, break out of the loop
+    if not ret:
         break
-    fps=cv2.getTickFrequency()/(cv2.getTickCount()-tickmark)
-    cv2.putText(frame, "FPS: {:05.2f}".format(fps), (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
-    cv2.imshow('video', frame)
-cap.release()
+
+    # run the YOLO model on the frame
+    detections = model(frame)[0]
+    
+    # loop over the detections
+    #for data in detections.boxes.data.tolist():
+    for box in detections.boxes:
+        #extract the label name
+        label=model.names.get(box.cls.item())
+        
+        # extract the confidence (i.e., probability) associated with the detection
+        data=box.data.tolist()[0]
+        confidence = data[4]
+
+        # filter out weak detections by ensuring the
+        # confidence is greater than the minimum confidence
+        if float(confidence) < CONFIDENCE_THRESHOLD:
+            continue
+
+        # if the confidence is greater than the minimum confidence,
+        # draw the bounding box on the frame
+        xmin, ymin, xmax, ymax = int(data[0]), int(data[1]), int(data[2]), int(data[3])
+        cv2.rectangle(frame, (xmin, ymin) , (xmax, ymax), GREEN, 2)
+
+        #draw confidence and label
+        y = ymin - 15 if ymin - 15 > 15 else ymin + 15
+        cv2.putText(frame, "{} {:.1f}%".format(label,float(confidence*100)), (xmin, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 2)
+        #cv2.circle(frame, (int(X)-15, int(Y)), 1, GREEN, 2)
+        #cv2.putText(frame, poslbl, (int(X), int(Y)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 2)
+
+    # end time to compute the fps
+    end = datetime.datetime.now()
+    # show the time it took to process 1 frame
+    total = (end - start).total_seconds()
+    print('Time to procss 1 frame :',round(total * 1000, 0),'miliseconds')
+
+    # calculate the frame per second and draw it on the frame
+    fps = 'FPS' + str(round(1/total,2))
+    cv2.putText(frame, fps, (50, 50),
+                cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 4)
+
+    # show the frame to our screen
+    cv2.imshow("Frame", frame)
+    #writer.write(frame)
+    if cv2.waitKey(1) == ord("q"):
+        break
+
+video_cap.release()
+vs.stop()
+#writer.release()
 cv2.destroyAllWindows()
+
 ```
